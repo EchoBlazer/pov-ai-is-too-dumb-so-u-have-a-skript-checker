@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Skript Scratchpad & Quick Checker</title>
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  h1 { color: #58a6ff; margin-top: 0; }
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 70vh;
+    background: #161b22;
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 16px;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 15px;
+    resize: vertical;
+    tab-size: 2;
+  }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 16px;
+  }
+  button {
+    background: #238636;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  button:hover { background: #2ea043; }
+  button.danger { background: #da3633; }
+  button.danger:hover { background: #c62828; }
+  .stats {
+    font-size: 0.9em;
+    color: #8b949e;
+  }
+  .issue {
+    color: #f85149;
+    margin: 4px 0;
+  }
+  #versionList {
+    max-height: 180px;
+    overflow-y: auto;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px;
+  }
+  .version-item {
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .version-item:hover,
+  .version-item.active {
+    background: #1f6feb;
+    color: white;
+  }
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #8b949e;
+    font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Skript Scratchpad & Quick Linter</h1>
+
+<div class="container">
+  <div>
+    <textarea id="editor" spellcheck="false" placeholder="Paste your Skript code here..."># Example
+on join:
+    send "&aWelcome!" to player
+    
+command /test:
+    trigger:
+        broadcast "Hello world!"</textarea>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="card">
+      <h3>Quick Actions</h3>
+      <button onclick="formatCode()">Format / Fix Indent</button>
+      <button onclick="countLines()">Count lines & stats</button>
+      <button onclick="checkCommonErrors()">Look for common mistakes</button>
+      <button class="danger" onclick="clearEditor()">Clear</button>
+    </div>
+
+    <div class="card">
+      <h3>Statistics</h3>
+      <div id="stats" class="stats">Lines: — • Characters: — • Words: —</div>
+    </div>
+
+    <div class="card">
+      <h3>Common Issues</h3>
+      <div id="issues"></div>
+    </div>
+
+    <div class="card">
+      <h3>Saved Versions</h3>
+      <div id="versionList"></div>
+      <input type="text" id="versionName" placeholder="Version name (optional)" style="width:100%; margin:8px 0; padding:8px; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:6px;">
+      <button onclick="saveVersion()">Save current as new version</button>
+    </div>
+
+  </div>
+</div>
+
+<footer>Made for quick Skript debugging • No code is sent anywhere • Everything stays in your browser</footer>
+
+<script>
+// ─── Core functions ──────────────────────────────────────────────
+
+const editor = document.getElementById('editor');
+const statsEl = document.getElementById('stats');
+const issuesEl = document.getElementById('issues');
+const versionList = document.getElementById('versionList');
+const versionNameInput = document.getElementById('versionName');
+
+function updateStats() {
+  const text = editor.value;
+  const lines = text.split('\n').length;
+  const chars = text.length;
+  const words = text.trim().split(/\s+/).length;
+  
+  statsEl.innerHTML = `Lines: <b>${lines}</b> • Characters: <b>${chars}</b> • Words: <b>${words}</b>`;
+}
+
+function countLines() {
+  updateStats();
+  alert(`Current code:\n\nLines: ${editor.value.split('\n').length}\nCharacters: ${editor.value.length}`);
+}
+
+function clearEditor() {
+  if (confirm("Clear everything?")) {
+    editor.value = "";
+    updateStats();
+    issuesEl.innerHTML = "";
+  }
+}
+
+function formatCode() {
+  let lines = editor.value.split('\n');
+  
+  let indentLevel = 0;
+  const formatted = lines.map(line => {
+    let trimmed = line.trim();
+    
+    if (trimmed === '' || trimmed.startsWith('#')) return line;
+    
+    // Simple heuristic - decrease indent on these keywords
+    if (/^(else|else if|on|command|function|every|on .*?:)$/i.test(trimmed)) {
+      indentLevel = Math.max(0, indentLevel - 1);
+    }
+    
+    let result = '  '.repeat(indentLevel) + trimmed;
+    
+    // Increase indent after these
+    if (/^(if|else( if)?|loop .*?|while|on .*?:|command .*:|function .*:)$/i.test(trimmed)) {
+      indentLevel++;
+    }
+    
+    return result;
+  });
+  
+  editor.value = formatted.join('\n');
+  updateStats();
+}
+
+function checkCommonErrors() {
+  const text = editor.value;
+  const lines = text.split('\n');
+  let issues = [];
+
+  // Very basic regex-based checks - add more as you need
+  const patterns = [
+    { re: /loop all players:/i, msg: "→ 'loop all players:' is usually fine, but consider 'loop all players:' → 'loop-player'" },
+    { re: /\.[a-zA-Z]/, msg: "→ Suspicious dot notation - Skript often prefers :: for variables" },
+    { re: /set .* to .* of .*/, msg: "→ Old property syntax? Modern: set {var} to player's health" },
+    { re: /register .* recipe:/i, msg: "→ Check your SkBee version! Recipe syntax changed many times" },
+    { re: /draw .* dust .* rgb/i, msg: "→ Old dust syntax - try dustOption(rgb(r,g,b), size)" },
+    { re: /on .*:/i, msg: "→ Multiple 'on ...:' blocks? Combine them if possible" },
+    { re: /wait [0-9]+ (ticks?|seconds?)/i, msg: "→ 'wait 5 ticks' → prefer 'wait 5 tick'" },
+  ];
+
+  lines.forEach((line, i) => {
+    patterns.forEach(p => {
+      if (p.re.test(line)) {
+        issues.push(`Line ${i+1}: ${p.msg}<br><code>${line.trim()}</code>`);
+      }
+    });
+  });
+
+  if (issues.length === 0) {
+    issuesEl.innerHTML = "<span style='color:#3fb950'>No obvious common mistakes found (very basic check)</span>";
+  } else {
+    issuesEl.innerHTML = issues.map(issue => `<div class="issue">${issue}</div>`).join('');
+  }
+}
+
+function saveVersion() {
+  const text = editor.value;
+  if (!text.trim()) return alert("Nothing to save!");
+
+  let name = versionNameInput.value.trim() || `Version ${new Date().toLocaleTimeString()}`;
+  localStorage.setItem(`skript_version_${name}`, text);
+  
+  versionNameInput.value = "";
+  loadVersions();
+}
+
+function loadVersions() {
+  versionList.innerHTML = "";
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith("skript_version_")) {
+      const name = key.replace("skript_version_", "");
+      const div = document.createElement("div");
+      div.className = "version-item";
+      div.textContent = name;
+      div.onclick = () => {
+        editor.value = localStorage.getItem(key);
+        updateStats();
+        document.querySelectorAll('.version-item').forEach(el => el.classList.remove('active'));
+        div.classList.add('active');
+      };
+      versionList.appendChild(div);
+    }
+  }
+}
+
+// Init
+editor.addEventListener('input', updateStats);
+window.addEventListener('load', () => {
+  updateStats();
+  loadVersions();
+});
+
+// Bonus: Ctrl+S to save version
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 's') {
+    e.preventDefault();
+    saveVersion();
+  }
+});
+</script>
+</body>
+</html>
