@@ -1,0 +1,1 @@
+# pov-ai-is-too-dumb-so-u-have-a-skript-checker
